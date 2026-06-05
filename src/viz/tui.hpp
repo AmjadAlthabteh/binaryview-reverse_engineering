@@ -9,6 +9,7 @@
 #include "analysis/overlay.hpp"
 #include "analysis/pattern_scanner.hpp"
 #include "analysis/string_extractor.hpp"
+#include "analysis/rich_header.hpp"
 
 #include <cstdio>
 #include <format>
@@ -489,6 +490,50 @@ inline void print_strings(const std::vector<ExtractedString>& strings) {
                     col::DGRAY.data(), s.wide ? "W" : " ",
                     col::BLUE.data(),  (unsigned long long)s.va, col::RESET.data(),
                     display.c_str());
+    }
+
+    box_bottom();
+    std::printf("\n");
+}
+
+// ── Rich header panel ─────────────────────────────────────────────────────────
+
+inline void print_rich_header(const std::optional<RichHeader>& rh) {
+    box_top("RICH HEADER  (toolchain fingerprint)");
+
+    if (!rh) {
+        std::printf("%s│%s  %sNot present — binary was not linked by MSVC, "
+                    "or the header was stripped.%s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    col::DGRAY.data(), col::RESET.data());
+        box_bottom();
+        std::printf("\n");
+        return;
+    }
+
+    std::string_view csum_col = rh->checksum_valid ? col::DGREEN.data() : col::DRED.data();
+    std::string_view csum_str = rh->checksum_valid ? "valid" : "INVALID (possibly patched)";
+
+    kv_row("Compiler:", RichHeaderParser::infer_compiler(*rh), col::YELLOW);
+    kv_row("XOR Key:",  std::format("{:#010x}", rh->xor_key),  col::BLUE);
+    kv_row("Checksum:", std::format("{:#010x}  [{}]",
+                                    rh->xor_key, csum_str), csum_col);
+    blank_row();
+
+    // Column header
+    std::printf("%s│%s  %s%-6s  %-6s  %-8s  %s%s\n",
+                col::DGRAY.data(), col::RESET.data(),
+                col::DGRAY.data(),
+                "ProdID", "Build", "Count", "Tool", col::RESET.data());
+
+    for (const auto& r : rh->records) {
+        std::string_view name = RichHeaderParser::product_name(r.product_id);
+        std::printf("%s│%s  %s%#06x%s  %s%-6u%s  %s%-8u%s  %s%s%s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    col::CYAN.data(),  r.product_id,  col::RESET.data(),
+                    col::DGRAY.data(), r.build_number, col::RESET.data(),
+                    col::DGRAY.data(), r.use_count,    col::RESET.data(),
+                    col::WHITE.data(), std::string{name}.c_str(), col::RESET.data());
     }
 
     box_bottom();

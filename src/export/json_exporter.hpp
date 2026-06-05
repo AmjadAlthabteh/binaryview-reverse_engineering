@@ -5,6 +5,7 @@
 #include "analysis/overlay.hpp"
 #include "analysis/pattern_scanner.hpp"
 #include "analysis/string_extractor.hpp"
+#include "analysis/rich_header.hpp"
 
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -23,7 +24,8 @@ public:
             const PEInfo& info,
             const std::optional<OverlayInfo>&      overlay = std::nullopt,
             const std::vector<PatternMatch>&        matches = {},
-            const std::vector<ExtractedString>&     strings = {}) {
+            const std::vector<ExtractedString>&     strings = {},
+            const std::optional<RichHeader>&        rich    = std::nullopt) {
         json root;
 
         root["generator"] = "BinView v1.0";
@@ -174,6 +176,27 @@ public:
                 {"va",          std::format("{:#x}", s.va)},
                 {"file_offset", std::format("{:#x}", s.file_offset)},
             });
+        }
+
+        // ── Rich header ───────────────────────────────────────────────────────
+        if (rich) {
+            json robj = {
+                {"xor_key",         std::format("{:#010x}", rich->xor_key)},
+                {"checksum_valid",  rich->checksum_valid},
+                {"compiler",        RichHeaderParser::infer_compiler(*rich)},
+            };
+            auto& recs = robj["records"] = json::array();
+            for (const auto& r : rich->records) {
+                recs.push_back({
+                    {"product_id",   r.product_id},
+                    {"build_number", r.build_number},
+                    {"use_count",    r.use_count},
+                    {"tool",         std::string{RichHeaderParser::product_name(r.product_id)}},
+                });
+            }
+            root["rich_header"] = std::move(robj);
+        } else {
+            root["rich_header"] = nullptr;
         }
 
         return root;

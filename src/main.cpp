@@ -9,6 +9,7 @@
 #include "analysis/overlay.hpp"
 #include "analysis/pattern_scanner.hpp"
 #include "analysis/string_extractor.hpp"
+#include "analysis/rich_header.hpp"
 #include "disasm/disassembler.hpp"
 #include "viz/tui.hpp"
 #include "viz/memory_map.hpp"
@@ -149,9 +150,16 @@ int main(int argc, char* argv[]) {
     auto parse_ms   = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     auto analyze_ms = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 
+    // ── Rich header (read before main display, needs pe_offset from DOS hdr) ───
+
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(mapper.view().data());
+    auto rich = binview::RichHeaderParser::parse(mapper,
+                    static_cast<uint32_t>(dos->e_lfanew));
+
     // ── Display ───────────────────────────────────────────────────────────────
 
     binview::tui::print_headers(info);
+    binview::tui::print_rich_header(rich);
     binview::tui::print_sections(info);
     binview::tui::print_memory_map(info);
     binview::tui::print_imports(info, args->verbose);
@@ -210,7 +218,7 @@ int main(int argc, char* argv[]) {
     // ── JSON export ───────────────────────────────────────────────────────────
 
     if (args->json_stdout || !args->json_output.empty()) {
-        auto doc = binview::JsonExporter::to_json(info, overlay, pattern_matches, strings);
+        auto doc = binview::JsonExporter::to_json(info, overlay, pattern_matches, strings, rich);
 
         if (args->json_stdout)
             std::printf("%s\n", doc.dump(2).c_str());
