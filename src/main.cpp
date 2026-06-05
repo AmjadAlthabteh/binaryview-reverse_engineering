@@ -8,6 +8,7 @@
 #include "analysis/iat_reconstructor.hpp"
 #include "analysis/overlay.hpp"
 #include "analysis/pattern_scanner.hpp"
+#include "analysis/string_extractor.hpp"
 #include "disasm/disassembler.hpp"
 #include "viz/tui.hpp"
 #include "viz/memory_map.hpp"
@@ -168,6 +169,11 @@ int main(int argc, char* argv[]) {
     auto pattern_matches = binview::PatternScanner::scan(info, mapper, sig_patterns);
     binview::tui::print_pattern_scan(pattern_matches);
 
+    // ── String extraction (interesting strings always shown) ──────────────────
+
+    auto strings = binview::StringExtractor::extract(info, mapper);
+    binview::tui::print_strings(strings);
+
     if (args->show_relocs)
         binview::tui::print_relocations(info);
 
@@ -204,7 +210,7 @@ int main(int argc, char* argv[]) {
     // ── JSON export ───────────────────────────────────────────────────────────
 
     if (args->json_stdout || !args->json_output.empty()) {
-        auto doc = binview::JsonExporter::to_json(info, overlay, pattern_matches);
+        auto doc = binview::JsonExporter::to_json(info, overlay, pattern_matches, strings);
 
         if (args->json_stdout)
             std::printf("%s\n", doc.dump(2).c_str());

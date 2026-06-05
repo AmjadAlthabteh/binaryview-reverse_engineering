@@ -4,6 +4,7 @@
 #include "analysis/entropy.hpp"
 #include "analysis/overlay.hpp"
 #include "analysis/pattern_scanner.hpp"
+#include "analysis/string_extractor.hpp"
 
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -20,8 +21,9 @@ class JsonExporter {
 public:
     [[nodiscard]] static json to_json(
             const PEInfo& info,
-            const std::optional<OverlayInfo>& overlay = std::nullopt,
-            const std::vector<PatternMatch>&  matches = {}) {
+            const std::optional<OverlayInfo>&      overlay = std::nullopt,
+            const std::vector<PatternMatch>&        matches = {},
+            const std::vector<ExtractedString>&     strings = {}) {
         json root;
 
         root["generator"] = "BinView v1.0";
@@ -157,6 +159,20 @@ public:
                 {"section",     m.section_name},
                 {"va",          std::format("{:#x}", m.va)},
                 {"file_offset", std::format("{:#x}", m.file_offset)},
+            });
+        }
+
+        // ── Strings ───────────────────────────────────────────────────────────
+        auto& ss = root["strings"] = json::array();
+        for (const auto& s : strings) {
+            ss.push_back({
+                {"value",       s.value},
+                {"kind",        std::string{s.kind_label().empty()
+                                            ? "plain" : s.kind_label()}},
+                {"wide",        s.wide},
+                {"section",     s.section_name},
+                {"va",          std::format("{:#x}", s.va)},
+                {"file_offset", std::format("{:#x}", s.file_offset)},
             });
         }
 

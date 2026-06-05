@@ -8,6 +8,7 @@
 #include "analysis/entropy.hpp"
 #include "analysis/overlay.hpp"
 #include "analysis/pattern_scanner.hpp"
+#include "analysis/string_extractor.hpp"
 
 #include <cstdio>
 #include <format>
@@ -429,6 +430,65 @@ inline void print_pattern_scan(const std::vector<PatternMatch>& matches,
                     col::YELLOW.data(),  m.section_name.c_str(),  col::RESET.data(),
                     col::CYAN.data(),    m.pattern_name.c_str(),  col::RESET.data(),
                     col::DGRAY.data(),   m.file_offset,           col::RESET.data());
+    }
+
+    box_bottom();
+    std::printf("\n");
+}
+
+// ── Strings panel ─────────────────────────────────────────────────────────────
+
+inline void print_strings(const std::vector<ExtractedString>& strings) {
+    size_t interesting = 0;
+    for (const auto& s : strings)
+        if (s.is_interesting()) ++interesting;
+
+    box_top(std::format("STRINGS ({} interesting / {} total)",
+                        interesting, strings.size()));
+
+    if (strings.empty()) {
+        std::printf("%s│%s  %sNo interesting strings found.%s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    col::DGRAY.data(), col::RESET.data());
+        box_bottom();
+        std::printf("\n");
+        return;
+    }
+
+    // Column header
+    std::printf("%s│%s  %s%-10s  %-9s  W  %-20s  %s%s\n",
+                col::DGRAY.data(), col::RESET.data(),
+                col::DGRAY.data(),
+                "Kind", "Section", "VA", "Value",
+                col::RESET.data());
+
+    for (const auto& s : strings) {
+        const char* kcol =
+            s.kind == StringKind::Suspicious   ? col::RED.data()     :
+            s.kind == StringKind::URL          ? col::CYAN.data()    :
+            s.kind == StringKind::IPv4         ? col::YELLOW.data()  :
+            s.kind == StringKind::FilePath     ? col::DYELLOW.data() :
+            s.kind == StringKind::RegistryKey  ? col::MAGENTA.data() :
+            s.kind == StringKind::Email        ? col::DGREEN.data()  :
+                                                 col::DGRAY.data();
+
+        std::string label{s.kind_label()};
+        if (label.empty()) label = "str";
+
+        // Truncate long values for display
+        std::string display = s.value;
+        if (display.size() > 60) {
+            display.resize(57);
+            display += "...";
+        }
+
+        std::printf("%s│%s  %s%-10s%s  %s%-9s%s  %s%s  %s%#018llx%s  %s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    kcol,             label.c_str(),         col::RESET.data(),
+                    col::DGRAY.data(), s.section_name.c_str(), col::RESET.data(),
+                    col::DGRAY.data(), s.wide ? "W" : " ",
+                    col::BLUE.data(),  (unsigned long long)s.va, col::RESET.data(),
+                    display.c_str());
     }
 
     box_bottom();
