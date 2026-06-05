@@ -6,6 +6,8 @@
 
 #include "core/pe_types.hpp"
 #include "analysis/entropy.hpp"
+#include "analysis/overlay.hpp"
+#include "analysis/pattern_scanner.hpp"
 
 #include <cstdio>
 #include <format>
@@ -359,6 +361,76 @@ inline void print_relocations(const PEInfo& info) {
                         col::DGRAY.data(), count, col::RESET.data());
         }
     }
+    box_bottom();
+    std::printf("\n");
+}
+
+// ── Overlay panel ─────────────────────────────────────────────────────────────
+
+inline void print_overlay(const std::optional<OverlayInfo>& ov) {
+    box_top("OVERLAY DETECTION");
+
+    if (!ov) {
+        std::printf("%s│%s  %sNo overlay detected.%s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    col::DGREEN.data(), col::RESET.data());
+        box_bottom();
+        std::printf("\n");
+        return;
+    }
+
+    auto elevel = EntropyAnalyzer::classify(ov->entropy);
+    auto ecol   = EntropyAnalyzer::level_color(elevel);
+
+    kv_row("Offset:",      std::format("{:#x}", ov->offset), col::BLUE);
+    kv_row("Size:",        std::format("{:,} bytes ({:.1f} KB)",
+                                       ov->size, ov->size / 1024.0));
+    kv_row("Magic:",       ov->magic_string(), col::DYELLOW);
+    kv_row("Fingerprint:", ov->fingerprint(), col::YELLOW);
+    kv_row("Entropy:",     std::format("{:.3f} — {}",
+                                       ov->entropy,
+                                       EntropyAnalyzer::level_label(elevel)),
+           ecol);
+
+    box_bottom();
+    std::printf("\n");
+}
+
+// ── Pattern scan panel ────────────────────────────────────────────────────────
+
+inline void print_pattern_scan(const std::vector<PatternMatch>& matches,
+                                bool no_results_ok = false) {
+    box_top(std::format("PATTERN SCAN ({} match{})",
+                        matches.size(), matches.size() == 1 ? "" : "es"));
+
+    if (matches.empty()) {
+        std::printf("%s│%s  %s%s%s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    no_results_ok ? col::DGREEN.data() : col::DGRAY.data(),
+                    no_results_ok ? "No signatures matched."
+                                  : "No common signatures matched.",
+                    col::RESET.data());
+        box_bottom();
+        std::printf("\n");
+        return;
+    }
+
+    // Header
+    std::printf("%s│%s  %s%-20s  %-9s  %-20s  %s%s\n",
+                col::DGRAY.data(), col::RESET.data(),
+                col::DGRAY.data(),
+                "Virtual Address", "Section", "Pattern",
+                "File Offset", col::RESET.data());
+
+    for (const auto& m : matches) {
+        std::printf("%s│%s  %s0x%016llx%s  %s%-9s%s  %s%-20s%s  %s0x%08x%s\n",
+                    col::DGRAY.data(), col::RESET.data(),
+                    col::BLUE.data(),    (unsigned long long)m.va, col::RESET.data(),
+                    col::YELLOW.data(),  m.section_name.c_str(),  col::RESET.data(),
+                    col::CYAN.data(),    m.pattern_name.c_str(),  col::RESET.data(),
+                    col::DGRAY.data(),   m.file_offset,           col::RESET.data());
+    }
+
     box_bottom();
     std::printf("\n");
 }

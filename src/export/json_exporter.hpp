@@ -2,6 +2,8 @@
 
 #include "core/pe_types.hpp"
 #include "analysis/entropy.hpp"
+#include "analysis/overlay.hpp"
+#include "analysis/pattern_scanner.hpp"
 
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -16,7 +18,10 @@ using json = nlohmann::ordered_json;
 
 class JsonExporter {
 public:
-    [[nodiscard]] static json to_json(const PEInfo& info) {
+    [[nodiscard]] static json to_json(
+            const PEInfo& info,
+            const std::optional<OverlayInfo>& overlay = std::nullopt,
+            const std::vector<PatternMatch>&  matches = {}) {
         json root;
 
         root["generator"] = "BinView v1.0";
@@ -131,16 +136,40 @@ public:
             {"indicators",       info.analysis.indicators},
         };
 
+        // ── Overlay ───────────────────────────────────────────────────────────
+        if (overlay) {
+            root["overlay"] = {
+                {"offset",      std::format("{:#x}", overlay->offset)},
+                {"size",        overlay->size},
+                {"entropy",     overlay->entropy},
+                {"magic",       overlay->magic_string()},
+                {"fingerprint", overlay->fingerprint()},
+            };
+        } else {
+            root["overlay"] = nullptr;
+        }
+
+        // ── Pattern matches ───────────────────────────────────────────────────
+        auto& pm = root["pattern_matches"] = json::array();
+        for (const auto& m : matches) {
+            pm.push_back({
+                {"pattern",     m.pattern_name},
+                {"section",     m.section_name},
+                {"va",          std::format("{:#x}", m.va)},
+                {"file_offset", std::format("{:#x}", m.file_offset)},
+            });
+        }
+
         return root;
     }
 
     [[nodiscard]] static Result<void>
-    write_file(const PEInfo& info, const std::filesystem::path& out) {
+    write_file(const json& doc, const std::filesystem::path& out) {
         std::ofstream f{out};
         if (!f.is_open())
             return std::unexpected{
                 std::format("Cannot open '{}' for writing", out.string())};
-        f << to_json(info).dump(2) << '\n';
+        f << doc.dump(2) << '\n';
         return {};
     }
 

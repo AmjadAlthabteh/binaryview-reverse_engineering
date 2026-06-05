@@ -6,6 +6,8 @@
 #include "analysis/entropy.hpp"
 #include "analysis/triage.hpp"
 #include "analysis/iat_reconstructor.hpp"
+#include "analysis/overlay.hpp"
+#include "analysis/pattern_scanner.hpp"
 #include "disasm/disassembler.hpp"
 #include "viz/tui.hpp"
 #include "viz/memory_map.hpp"
@@ -155,6 +157,17 @@ int main(int argc, char* argv[]) {
     binview::tui::print_exports(info, args->verbose);
     binview::tui::print_triage(info);
 
+    // ── Overlay detection (always shown) ──────────────────────────────────────
+
+    auto overlay = binview::OverlayDetector::detect(info, mapper);
+    binview::tui::print_overlay(overlay);
+
+    // ── Pattern scan (common signatures, always shown) ────────────────────────
+
+    auto sig_patterns    = binview::PatternScanner::common_signatures();
+    auto pattern_matches = binview::PatternScanner::scan(info, mapper, sig_patterns);
+    binview::tui::print_pattern_scan(pattern_matches);
+
     if (args->show_relocs)
         binview::tui::print_relocations(info);
 
@@ -190,21 +203,24 @@ int main(int argc, char* argv[]) {
 
     // ── JSON export ───────────────────────────────────────────────────────────
 
-    if (args->json_stdout) {
-        std::printf("%s\n", binview::JsonExporter::to_json(info).dump(2).c_str());
-    }
+    if (args->json_stdout || !args->json_output.empty()) {
+        auto doc = binview::JsonExporter::to_json(info, overlay, pattern_matches);
 
-    if (!args->json_output.empty()) {
-        if (auto r = binview::JsonExporter::write_file(info, args->json_output); !r) {
-            std::fprintf(stderr, "%s[!] JSON write failed: %s%s\n",
-                         binview::tui::col::RED.data(),
-                         r.error().c_str(),
-                         binview::tui::col::RESET.data());
-        } else {
-            std::printf("%s[+] JSON report saved → %s%s\n",
-                        binview::tui::col::DGREEN.data(),
-                        args->json_output.string().c_str(),
-                        binview::tui::col::RESET.data());
+        if (args->json_stdout)
+            std::printf("%s\n", doc.dump(2).c_str());
+
+        if (!args->json_output.empty()) {
+            if (auto r = binview::JsonExporter::write_file(doc, args->json_output); !r) {
+                std::fprintf(stderr, "%s[!] JSON write failed: %s%s\n",
+                             binview::tui::col::RED.data(),
+                             r.error().c_str(),
+                             binview::tui::col::RESET.data());
+            } else {
+                std::printf("%s[+] JSON report saved → %s%s\n",
+                            binview::tui::col::DGREEN.data(),
+                            args->json_output.string().c_str(),
+                            binview::tui::col::RESET.data());
+            }
         }
     }
 
