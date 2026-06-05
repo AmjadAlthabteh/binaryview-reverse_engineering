@@ -1,0 +1,13 @@
+{
+    "name": "binview",
+    "version": "1.0.0",
+    "description": "PE File Analyzer & Import Reconstructor",
+    "dependencies": [
+        {
+            "name": "capstone",
+            "features": ["x86"]
+        },
+        "nlohmann-json",
+        "catch2"
+    ]
+}
